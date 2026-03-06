@@ -2,8 +2,25 @@ import { useState, useEffect } from 'react';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart
 } from 'recharts';
-import { CheckCircle2, Circle, Flame, Trophy, Plus, Trash2, Clock, Edit2 } from 'lucide-react';
+import { CheckCircle2, Circle, Flame, Trophy, Plus, Trash2, Clock, Edit2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from './lib/supabase';
+
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+// Generate all days in a specific month
+const generateMonthDays = (baseDate: Date) => {
+  const days = [];
+  const year = baseDate.getFullYear();
+  const month = baseDate.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  for (let i = 1; i <= daysInMonth; i++) {
+    const mm = String(month + 1).padStart(2, '0');
+    const dd = String(i).padStart(2, '0');
+    days.push(`${year}-${mm}-${dd}`);
+  }
+  return days;
+};
 
 // Format: YYYY-MM-DD
 const getTodayStr = () => {
@@ -44,6 +61,12 @@ export default function App() {
   const [history, setHistory] = useState<Record<string, Record<string, boolean>>>({});
   const [today] = useState(getTodayStr());
 
+  const [currentMonthDate, setCurrentMonthDate] = useState(() => {
+    const d = new Date();
+    d.setDate(1);
+    return d;
+  });
+
   // UI State
   const [isAddingMode, setIsAddingMode] = useState(false);
   const [newHabitName, setNewHabitName] = useState('');
@@ -62,7 +85,7 @@ export default function App() {
   // Load from Supabase
   useEffect(() => {
     fetchData();
-  }, [today]);
+  }, [today, currentMonthDate]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -76,10 +99,14 @@ export default function App() {
       setHabits(habitsData);
     }
 
-    // 2. Fetch Completions for last 14 days
+    // 2. Fetch Completions
     const days = generateDays();
-    const minDate = days[0];
-    const maxDate = days[days.length - 1];
+    const monthDays = generateMonthDays(currentMonthDate);
+
+    // find min and max
+    const allDates = [...days, ...monthDays].sort();
+    const minDate = allDates[0];
+    const maxDate = allDates[allDates.length - 1];
 
     const { data: completionsData, error: completionsError } = await supabase
       .from('habit_completions')
@@ -223,6 +250,33 @@ export default function App() {
       else if (day !== today) break; // If yesterday wasn't perfect, streak broken
     }
   }
+
+  const monthlyChartData = generateMonthDays(currentMonthDate).map(date => {
+    const dayData = history[date] || {};
+    const score = Object.values(dayData).filter(Boolean).length;
+    const dateObj = new Date(date);
+    return {
+      date,
+      displayDate: `${dateObj.getDate()}`,
+      score: totalHabits > 0 ? Math.round((score / totalHabits) * 100) : 0
+    };
+  });
+
+  const handlePrevMonth = () => {
+    setCurrentMonthDate(prev => {
+      const d = new Date(prev);
+      d.setMonth(d.getMonth() - 1);
+      return d;
+    });
+  };
+
+  const handleNextMonth = () => {
+    setCurrentMonthDate(prev => {
+      const d = new Date(prev);
+      d.setMonth(d.getMonth() + 1);
+      return d;
+    });
+  };
 
   return (
     <div className="min-h-screen bg-[#09090b] text-[#fafafa] font-sans selection:bg-[#5272c6] selection:text-white pb-20">
@@ -595,6 +649,80 @@ export default function App() {
         </div>
 
       </div>
+
+      {/* Monthly Graph - Full Width Below */}
+      <div className="w-full mx-auto px-4 sm:px-8 xl:px-12 mt-8 pb-12">
+        <div className="bg-[#121214] border border-[#27272a] rounded-xl p-5 shadow-xl flex flex-col h-[400px]">
+          <div className="flex justify-between items-center mb-6 px-1">
+            <h2 className="text-lg font-semibold text-[#fcfcfc] flex items-center gap-2">
+              Monthly Overview
+            </h2>
+            <div className="flex items-center gap-4 bg-[#27272a]/50 p-1 rounded-lg">
+              <button
+                onClick={handlePrevMonth}
+                className="p-1.5 hover:bg-[#27272a] rounded-md transition-colors text-[#a1a1aa] hover:text-[#fcfcfc]"
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <span className="font-medium text-sm text-[#fcfcfc] min-w-[120px] text-center">
+                {MONTH_NAMES[currentMonthDate.getMonth()]} {currentMonthDate.getFullYear()}
+              </span>
+              <button
+                onClick={handleNextMonth}
+                className="p-1.5 hover:bg-[#27272a] rounded-md transition-colors text-[#a1a1aa] hover:text-[#fcfcfc]"
+              >
+                <ChevronRight size={18} />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex-1 w-full habits-graph relative -left-4 min-h-[250px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={monthlyChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorScoreMonthly" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#5272c6" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#5272c6" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+                <XAxis
+                  dataKey="displayDate"
+                  stroke="#a1a1aa"
+                  fontSize={11}
+                  tickLine={false}
+                  axisLine={false}
+                  dy={10}
+                />
+                <YAxis
+                  stroke="#a1a1aa"
+                  fontSize={11}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(val) => `${val}%`}
+                  domain={[0, 100]}
+                />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#18181b', borderColor: '#27272a', borderRadius: '8px', fontSize: '13px' }}
+                  itemStyle={{ color: '#fcfcfc' }}
+                  formatter={(value: number | undefined) => [`${value || 0}% Complete`, 'Score']}
+                  labelStyle={{ color: '#a1a1aa', marginBottom: '4px' }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="score"
+                  stroke="#5272c6"
+                  strokeWidth={3}
+                  fillOpacity={1}
+                  fill="url(#colorScoreMonthly)"
+                  activeDot={{ r: 5, fill: '#fcfcfc', stroke: '#5272c6', strokeWidth: 2 }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
     </div>
   );
 }
