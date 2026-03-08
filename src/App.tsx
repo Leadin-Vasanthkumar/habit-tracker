@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart
 } from 'recharts';
-import { CheckCircle2, Circle, Flame, Trophy, Plus, Trash2, Clock, Edit2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CheckCircle2, Circle, Flame, Trophy, Plus, Trash2, Clock, Edit2, ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
 import { supabase } from './lib/supabase';
 
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -57,6 +57,8 @@ const generateDays = () => {
 const TIMELINE_HOURS = Array.from({ length: 24 }, (_, i) => i);
 
 export default function App() {
+  const [authMode, setAuthMode] = useState<'loading' | 'unauthenticated' | 'authenticated' | 'viewer'>('loading');
+
   const [habits, setHabits] = useState<Habit[]>([]);
   const [history, setHistory] = useState<Record<string, Record<string, boolean>>>({});
   const [today] = useState(getTodayStr());
@@ -73,7 +75,7 @@ export default function App() {
   const [newHabitIcon, setNewHabitIcon] = useState('🔥');
   const [newHabitStart, setNewHabitStart] = useState('09:00');
   const [newHabitEnd, setNewHabitEnd] = useState('10:00');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   // Edit State
   const [editingHabitId, setEditingHabitId] = useState<string | null>(null);
@@ -82,12 +84,73 @@ export default function App() {
   const [editHabitStart, setEditHabitStart] = useState('');
   const [editHabitEnd, setEditHabitEnd] = useState('');
 
-  // Load from Supabase
+  // Handle Authentication Session
   useEffect(() => {
-    fetchData();
-  }, [today, currentMonthDate]);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setAuthMode('authenticated');
+      } else {
+        setAuthMode(current => current === 'viewer' ? 'viewer' : 'unauthenticated');
+      }
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        setAuthMode('authenticated');
+      } else {
+        setAuthMode(current => current === 'viewer' ? 'viewer' : 'unauthenticated');
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleSignIn = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin
+      }
+    });
+  };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    // After sign out, the event listener will pick it up and set it to unauthenticated.
+  };
+
+  // Load from Supabase (or set up demo data)
+  useEffect(() => {
+    if (authMode === 'authenticated' || authMode === 'viewer') {
+      fetchData();
+    }
+  }, [today, currentMonthDate, authMode]);
 
   const fetchData = async () => {
+    if (authMode === 'viewer') {
+      // Provide starting mock data for viewer mode if none exists
+      if (habits.length === 0) {
+        setHabits([
+          { id: 'mock-1', name: 'Morning Run', icon: '🏃', start_time: '06:00', end_time: '07:00', sort_order: 0 },
+          { id: 'mock-2', name: 'Deep Work', icon: '⚡', start_time: '09:00', end_time: '12:00', sort_order: 1 },
+          { id: 'mock-3', name: 'Read Book', icon: '📚', start_time: '20:00', end_time: '21:00', sort_order: 2 },
+        ]);
+
+        // Mock some history for the graph
+        const mockHistory: Record<string, Record<string, boolean>> = {};
+        const days = generateDays();
+        days.forEach(d => {
+          if (Math.random() > 0.3) {
+            mockHistory[d] = { 'mock-1': true, 'mock-2': Math.random() > 0.5, 'mock-3': true };
+          }
+        });
+        setHistory(mockHistory);
+      }
+      return;
+    }
+
     setLoading(true);
     // 1. Fetch Habits
     const { data: habitsData, error: habitsError } = await supabase
@@ -136,6 +199,8 @@ export default function App() {
     newHistory[today][habitId] = !isDone;
     setHistory(newHistory);
 
+    if (authMode === 'viewer') return;
+
     if (!isDone) {
       // Mark as done (insert)
       await supabase
@@ -160,6 +225,16 @@ export default function App() {
       end_time: newHabitEnd,
       sort_order: habits.length
     };
+
+    if (authMode === 'viewer') {
+      const mockId = Math.random().toString(36).substring(7);
+      setHabits([...habits, { ...newHabit, id: mockId }]);
+      setNewHabitName('');
+      setNewHabitStart('09:00');
+      setNewHabitEnd('10:00');
+      setIsAddingMode(false);
+      return;
+    }
 
     const { data, error } = await supabase
       .from('habits')
@@ -199,6 +274,8 @@ export default function App() {
     setHabits(habits.map(h => h.id === editingHabitId ? { ...h, ...updates } : h));
     setEditingHabitId(null);
 
+    if (authMode === 'viewer') return;
+
     await supabase
       .from('habits')
       .update(updates)
@@ -210,6 +287,8 @@ export default function App() {
 
     // Optimistic UI
     setHabits(habits.filter(h => h.id !== id));
+
+    if (authMode === 'viewer') return;
 
     await supabase
       .from('habits')
@@ -278,8 +357,71 @@ export default function App() {
     });
   };
 
+  if (authMode === 'loading') {
+    return (
+      <div className="min-h-screen bg-[#09090b] flex items-center justify-center text-[#fcfcfc]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-t-2 border-[#5272c6]"></div>
+      </div>
+    );
+  }
+
+  if (authMode === 'unauthenticated') {
+    return (
+      <div className="min-h-screen bg-[#09090b] text-[#fafafa] flex flex-col items-center justify-center px-4 font-sans selection:bg-[#5272c6] selection:text-white">
+        <div className="max-w-md w-full bg-[#121214] border border-[#27272a] rounded-xl p-8 shadow-xl text-center animate-in fade-in zoom-in duration-300">
+          <div className="mx-auto bg-[#5272c6]/10 w-16 h-16 rounded-full flex items-center justify-center mb-6 border border-[#5272c6]/30 shadow-[0_0_15px_rgba(82,114,198,0.2)]">
+            <CheckCircle2 className="text-[#5272c6]" size={32} />
+          </div>
+          <h1 className="text-3xl font-bold tracking-tight text-[#fcfcfc] mb-2">Flowlock</h1>
+          <p className="text-[#a1a1aa] mb-8 text-sm">Focus strictly. Build daily. Own your habits.</p>
+
+          <div className="space-y-4">
+            <button
+              onClick={handleSignIn}
+              className="w-full bg-[#fcfcfc] text-[#09090b] font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-3 hover:bg-[#e4e4e7] transition-all transform active:scale-[0.98]"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24">
+                <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                <path fill="none" d="M1 1h22v22H1z" />
+              </svg>
+              Sign in with Google
+            </button>
+
+            <div className="relative flex py-2 items-center">
+              <div className="flex-grow border-t border-[#27272a]"></div>
+              <span className="flex-shrink-0 mx-4 text-[#71717a] text-xs uppercase tracking-wider">or</span>
+              <div className="flex-grow border-t border-[#27272a]"></div>
+            </div>
+
+            <button
+              onClick={() => setAuthMode('viewer')}
+              className="w-full bg-transparent border border-[#27272a] text-[#a1a1aa] font-medium py-3 px-4 rounded-lg hover:bg-[#27272a]/50 hover:text-[#fcfcfc] transition-all"
+            >
+              Try Demo (Viewer Mode)
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#09090b] text-[#fafafa] font-sans selection:bg-[#5272c6] selection:text-white pb-20">
+
+      {authMode === 'viewer' && (
+        <div className="bg-[#5272c6]/20 border-b border-[#5272c6]/30 px-4 py-2.5 text-center text-sm text-[#8aa5f2] flex flex-wrap justify-center items-center gap-x-4 gap-y-1 z-50 sticky top-0 backdrop-blur-md shadow-sm">
+          <span className="font-medium animate-pulse">Viewing in Sandbox Mode. Changes won't be saved.</span>
+          <button
+            onClick={() => setAuthMode('unauthenticated')}
+            className="text-[#fcfcfc] font-bold text-xs bg-[#5272c6]/40 hover:bg-[#5272c6]/60 px-3 py-1 rounded-full transition-colors"
+          >
+            Sign In Now
+          </button>
+        </div>
+      )}
 
       <div className="w-full mx-auto px-4 sm:px-8 xl:px-12 mt-4 md:mt-8 space-y-8 flex flex-col lg:flex-row gap-8">
 
@@ -288,10 +430,10 @@ export default function App() {
           {/* Header */}
           <header className="flex justify-between items-end border-b border-[#27272a] pb-6">
             <div>
-              <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-[#fcfcfc]">Vasanth's OS</h1>
-              <p className="text-[#a1a1aa] mt-2 text-sm md:text-base">Focus strictly on Flowlock. Build daily.</p>
+              <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-[#fcfcfc]">OS Core</h1>
+              <p className="text-[#a1a1aa] mt-2 text-sm md:text-base">Focus strictly. Build daily.</p>
             </div>
-            <div className="text-right flex items-center gap-4">
+            <div className="text-right flex items-center gap-6">
               <div className="flex flex-col items-end">
                 <span className="text-xs text-[#a1a1aa] uppercase font-bold tracking-wider">Perfect Streak</span>
                 <div className="flex items-center gap-1 text-[#fcfcfc] text-xl font-bold">
@@ -299,6 +441,16 @@ export default function App() {
                   {streak}
                 </div>
               </div>
+
+              {authMode === 'authenticated' && (
+                <button
+                  onClick={handleSignOut}
+                  className="flex items-center justify-center p-2.5 bg-[#27272a]/50 hover:bg-red-500/10 text-[#a1a1aa] hover:text-red-400 border border-transparent hover:border-red-500/30 rounded-lg transition-all"
+                  title="Sign Out"
+                >
+                  <LogOut size={18} />
+                </button>
+              )}
             </div>
           </header>
 
