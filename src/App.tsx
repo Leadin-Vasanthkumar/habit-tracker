@@ -722,7 +722,7 @@ export default function App() {
         </div>
 
         {/* Right Column (30%) - Timeline Calendar */}
-        <div className="lg:w-[30%] bg-[#121214] border border-[#27272a] rounded-xl shadow-xl flex flex-col h-[calc(100vh-4rem)] sticky top-8">
+        <div className="lg:w-[30%] bg-[#121214] border border-[#27272a] rounded-xl shadow-xl flex flex-col h-[770px]">
           <div className="p-5 border-b border-[#27272a] flex justify-between items-center bg-[#121214] rounded-t-xl z-20 shadow-md">
             <h2 className="text-lg font-semibold text-[#fcfcfc] flex items-center gap-2">
               <Clock size={18} className="text-[#fcfcfc]" /> Daily Timeline
