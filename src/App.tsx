@@ -427,10 +427,10 @@ export default function App() {
         </div>
       )}
 
-      <div className="w-full mx-auto px-4 sm:px-8 xl:px-12 mt-4 md:mt-8 space-y-8 flex flex-col lg:flex-row gap-8">
+      <div className="w-full mx-auto px-4 sm:px-8 xl:px-12 mt-4 md:mt-8 flex flex-col lg:flex-row gap-8">
 
         {/* Left Column (70%) */}
-        <div className="lg:w-[70%] space-y-8">
+        <div className="lg:w-[70%] flex flex-col">
           {/* Header */}
           <header className="flex justify-between items-end border-b border-[#27272a] pb-6">
             <div>
@@ -458,7 +458,7 @@ export default function App() {
             </div>
           </header>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
 
             {/* Today's Checklist */}
             <div className="bg-[#121214] border border-[#27272a] rounded-xl p-5 shadow-xl flex flex-col">
@@ -722,7 +722,7 @@ export default function App() {
         </div>
 
         {/* Right Column (30%) - Timeline Calendar */}
-        <div className="lg:w-[30%] bg-[#121214] border border-[#27272a] rounded-xl shadow-xl flex flex-col h-[770px]">
+        <div className="lg:w-[30%] bg-[#121214] border border-[#27272a] rounded-xl shadow-xl flex flex-col h-[770px] mt-8 lg:mt-[105px]">
           <div className="p-5 border-b border-[#27272a] flex justify-between items-center bg-[#121214] rounded-t-xl z-20 shadow-md">
             <h2 className="text-lg font-semibold text-[#fcfcfc] flex items-center gap-2">
               <Clock size={18} className="text-[#fcfcfc]" /> Daily Timeline
