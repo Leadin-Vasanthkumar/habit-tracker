@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, LineChart
 } from 'recharts';
 import { CheckCircle2, Circle, Flame, Trophy, Plus, Trash2, Clock, Edit2, ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
 import { supabase } from './lib/supabase';
@@ -76,6 +76,7 @@ export default function App() {
   const [newHabitStart, setNewHabitStart] = useState('09:00');
   const [newHabitEnd, setNewHabitEnd] = useState('10:00');
   const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Edit State
   const [editingHabitId, setEditingHabitId] = useState<string | null>(null);
@@ -216,7 +217,8 @@ export default function App() {
   };
 
   const addHabit = async () => {
-    if (!newHabitName.trim()) return;
+    if (!newHabitName.trim() || isSubmitting) return;
+    setIsSubmitting(true);
 
     const newHabit = {
       name: newHabitName.trim(),
@@ -233,6 +235,7 @@ export default function App() {
       setNewHabitStart('09:00');
       setNewHabitEnd('10:00');
       setIsAddingMode(false);
+      setIsSubmitting(false);
       return;
     }
 
@@ -249,6 +252,7 @@ export default function App() {
       setNewHabitEnd('10:00');
       setIsAddingMode(false);
     }
+    setIsSubmitting(false);
   };
 
   const startEditing = (habit: Habit, e: React.MouseEvent) => {
@@ -619,7 +623,12 @@ export default function App() {
                             className="bg-transparent border-none text-[#fcfcfc] focus:outline-none focus:ring-1 focus:ring-[#5272c6] rounded px-1"
                             value={newHabitEnd}
                             onChange={(e) => setNewHabitEnd(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && addHabit()}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                addHabit();
+                              }
+                            }}
                           />
                         </div>
                       </div>
@@ -632,9 +641,11 @@ export default function App() {
                         </button>
                         <button
                           onClick={addHabit}
-                          className="flex-1 bg-[#5272c6] text-white px-3 py-1.5 rounded-md text-sm font-medium hover:bg-[#4361b3] transition-colors"
+                          disabled={isSubmitting}
+                          className={`flex-1 text-white px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${isSubmitting ? 'bg-[#5272c6]/50 cursor-not-allowed' : 'bg-[#5272c6] hover:bg-[#4361b3]'
+                            }`}
                         >
-                          Add Habit
+                          {isSubmitting ? 'Adding...' : 'Add Habit'}
                         </button>
                       </div>
                     </div>
@@ -671,13 +682,7 @@ export default function App() {
 
               <div className="flex-1 w-full habits-graph relative -left-4">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#5272c6" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#5272c6" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
+                  <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
                     <XAxis
                       dataKey="displayDate"
@@ -701,16 +706,15 @@ export default function App() {
                       formatter={(value: number | undefined) => [`${value || 0}% Complete`, 'Score']}
                       labelStyle={{ color: '#a1a1aa', marginBottom: '4px' }}
                     />
-                    <Area
+                    <Line
                       type="monotone"
                       dataKey="score"
                       stroke="#5272c6"
                       strokeWidth={3}
-                      fillOpacity={1}
-                      fill="url(#colorScore)"
+                      dot={false}
                       activeDot={{ r: 5, fill: '#fcfcfc', stroke: '#5272c6', strokeWidth: 2 }}
                     />
-                  </AreaChart>
+                  </LineChart>
                 </ResponsiveContainer>
               </div>
             </div>
@@ -830,13 +834,7 @@ export default function App() {
 
           <div className="flex-1 w-full habits-graph relative -left-4 min-h-[250px]">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={monthlyChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorScoreMonthly" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#5272c6" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#5272c6" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
+              <LineChart data={monthlyChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
                 <XAxis
                   dataKey="displayDate"
@@ -860,16 +858,15 @@ export default function App() {
                   formatter={(value: number | undefined) => [`${value || 0}% Complete`, 'Score']}
                   labelStyle={{ color: '#a1a1aa', marginBottom: '4px' }}
                 />
-                <Area
+                <Line
                   type="monotone"
                   dataKey="score"
                   stroke="#5272c6"
                   strokeWidth={3}
-                  fillOpacity={1}
-                  fill="url(#colorScoreMonthly)"
+                  dot={false}
                   activeDot={{ r: 5, fill: '#fcfcfc', stroke: '#5272c6', strokeWidth: 2 }}
                 />
-              </AreaChart>
+              </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
